@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>校园设备报修系统</title>
+    <link rel="stylesheet" href="/lib/element-plus.css">
+    <style>
+        [v-cloak] { display: none; }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+            background: #f5f7fa;
+        }
+
+        /* 登录页 */
+        .login-wrap {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .login-card { width: 400px; padding: 10px 8px; border-radius: 14px; }
+        .login-title { text-align: center; font-size: 24px; font-weight: 600; color: #303133; }
+        .login-sub {
+            text-align: center; font-size: 12px; color: #a8abb2;
+            margin: 6px 0 24px; letter-spacing: 1px;
+        }
+        .login-tips { margin-top: 16px; text-align: center; font-size: 12px; color: #909399; }
+
+        /* 主界面 */
+        .layout { min-height: 100vh; }
+        .header {
+            display: flex; align-items: center; justify-content: space-between;
+            background: #fff; border-bottom: 1px solid #ebeef5;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, .04);
+        }
+        .brand { font-size: 18px; font-weight: 600; color: #303133; }
+        .user-info { display: flex; align-items: center; gap: 12px; }
+        .username { color: #606266; font-size: 14px; }
+
+        .toolbar {
+            display: flex; gap: 12px; align-items: center;
+            margin-bottom: 16px; flex-wrap: wrap;
+        }
+        .pager { display: flex; justify-content: flex-end; margin-top: 16px; }
+
+        .section-title { margin: 24px 0 16px; font-size: 15px; color: #303133; }
+        .log-remark { color: #909399; font-size: 13px; }
+        .evaluation-content { color: #606266; margin-top: 10px; }
+
+        @media (max-width: 768px) {
+            .login-card { width: 92%; }
+            .brand { font-size: 15px; }
+            .username { display: none; }
+        }
+    </style>
+</head>
+<body>
+<div id="app" v-cloak>
+
+    <!-- ==================== 登录页 ==================== -->
+    <div v-if="!token" class="login-wrap">
+        <el-card class="login-card" shadow="always">
+            <div class="login-title">校园设备报修系统</div>
+            <div class="login-sub">CAMPUS REPAIR MANAGEMENT</div>
+            <el-form @submit.prevent>
+                <el-form-item>
+                    <el-input v-model="loginForm.username" placeholder="用户名" size="large"></el-input>
+                </el-form-item>
+                <el-form-item>
+                    <el-input v-model="loginForm.password" type="password" placeholder="密码" size="large"
+                              show-password @keyup.enter="login"></el-input>
+                </el-form-item>
+                <el-button type="primary" size="large" style="width: 100%"
+                           :loading="loginLoading" @click="login">登 录</el-button>
+            </el-form>
+            <div class="login-tips">
+                测试账号：admin / student / repairer　密码：123456
+            </div>
+        </el-card>
+    </div>
+
+    <!-- ==================== 主界面 ==================== -->
+    <el-container v-else class="layout">
+        <el-header class="header">
+            <div class="brand">校园设备报修系统</div>
+            <div class="user-info">
+                <el-tag size="small" type="info">{{ roleText }}</el-tag>
+                <span class="username">{{ user.realName || user.username }}</span>
+                <el-button link type="primary" @click="logout">退出</el-button>
+            </div>
+        </el-header>
+
+        <el-main>
+            <div class="toolbar">
+                <el-button v-if="isStudent" type="primary" @click="openCreate">＋ 提交报修</el-button>
+                <el-select v-model="query.status" placeholder="全部状态" clearable
+                           style="width: 140px" @change="loadOrders">
+                    <el-option label="待派单" :value="0"></el-option>
+                    <el-option label="已派单" :value="1"></el-option>
+                    <el-option label="处理中" :value="2"></el-option>
+                    <el-option label="已完成" :value="3"></el-option>
+                    <el-option label="已评价" :value="4"></el-option>
+                </el-select>
+                <el-input v-model="query.keyword" placeholder="工单号 / 设备 / 地点" clearable
+                          style="width: 240px" @keyup.enter="loadOrders"></el-input>
+                <el-button @click="loadOrders">查询</el-button>
+            </div>
+
+            <el-table :data="orders" v-loading="loading" border stripe style="width: 100%">
+                <el-table-column prop="orderNo" label="工单号" width="190"></el-table-column>
+                <el-table-column prop="deviceName" label="设备" width="110"></el-table-column>
+                <el-table-column prop="categoryName" label="分类" width="100"></el-table-column>
+                <el-table-column prop="location" label="地点" min-width="140"></el-table-column>
+                <el-table-column prop="studentName" label="报修人" width="100"></el-table-column>
+                <el-table-column label="状态" width="100">
+                    <template #default="{ row }">
+                        <el-tag :type="statusType(row.status)" effect="light">{{ row.statusName }}</el-tag>
+                    </template>
+                </el-table-column>
+                <el-table-column prop="repairerName" label="维修工" width="100">
+                    <template #default="{ row }">{{ row.repairerName || '-' }}</template>
+                </el-table-column>
+                <el-table-column prop="createTime" label="创建时间" width="170"></el-table-column>
+                <el-table-column label="操作" width="220" fixed="right">
+                    <template #default="{ row }">
+                        <el-button link type="primary" @click="openDetail(row)">详情</el-button>
+                        <el-button v-if="isAdmin && row.status === 0" link type="warning"
+                                   @click="openAssign(row)">派单</el-button>
+                        <el-button v-if="isRepairer && row.status === 1" link type="primary"
+                                   @click="startOrder(row)">开始处理</el-button>
+                        <el-button v-if="isRepairer && row.status === 2" link type="success"
+                                   @click="finishOrder(row)">完成</el-button>
+                        <el-button v-if="isStudent && row.status === 3" link type="success"
+                                   @click="openEvaluate(row)">评价</el-button>
+                    </template>
+                </el-table-column>
+            </el-table>
+
+            <div class="pager">
+                <el-pagination
+                        v-model:current-page="query.pageNum"
+                        v-model:page-size="query.pageSize"
+                        :total="total"
+                        layout="total, prev, pager, next"
+                        @current-change="loadOrders"></el-pagination>
+            </div>
+        </el-main>
+    </el-container>
+
+    <!-- ==================== 提交报修 ==================== -->
+    <el-dialog v-model="createVisible" title="提交报修" width="520px">
+        <el-form label-width="90px">
+            <el-form-item label="设备分类" required>
+                <el-select v-model="createForm.categoryId" placeholder="请选择设备分类" style="width: 100%">
+                    <el-option v-for="c in categories" :key="c.id" :label="c.name" :value="c.id"></el-option>
+                </el-select>
+            </el-form-item>
+            <el-form-item label="设备名称" required>
+                <el-input v-model="createForm.deviceName" placeholder="例如：投影仪"></el-input>
+            </el-form-item>
+            <el-form-item label="故障地点" required>
+                <el-input v-model="createForm.location" placeholder="例如：教学楼 A301"></el-input>
+            </el-form-item>
+            <el-form-item label="故障描述">
+                <el-input v-model="createForm.description" type="textarea" :rows="3"
+                          placeholder="描述一下故障现象"></el-input>
+            </el-form-item>
+        </el-form>
+        <template #footer>
+            <el-button @click="createVisible = false">取消</el-button>
+            <el-button type="primary" @click="submitCreate">提交</el-button>
+        </template>
+    </el-dialog>
+
+    <!-- ==================== 派单 ==================== -->
+    <el-dialog v-model="assignVisible" title="派单" width="420px">
+        <el-form label-width="90px">
+            <el-form-item label="维修工" required>
+                <el-select v-model="assignForm.repairerId" placeholder="请选择维修工" style="width: 100%">
+                    <el-option v-for="r in repairers" :key="r.id"
+                               :label="(r.realName || r.username) + '（' + r.username + '）'" :value="r.id"></el-option>
+                </el-select>
+            </el-form-item>
+        </el-form>
+        <template #footer>
+            <el-button @click="assignVisible = false">取消</el-button>
+            <el-button type="primary" @click="submitAssign">确认派单</el-button>
+        </template>
+    </el-dialog>
+
+    <!-- ==================== 评价 ==================== -->
+    <el-dialog v-model="evaluateVisible" title="评价" width="420px">
+        <el-form label-width="90px">
+            <el-form-item label="评分">
+                <el-rate v-model="evaluateForm.score"></el-rate>
+            </el-form-item>
+            <el-form-item label="评价内容">
+                <el-input v-model="evaluateForm.content" type="textarea" :rows="3"
+                          placeholder="说说维修体验"></el-input>
+            </el-form-item>
+        </el-form>
+        <template #footer>
+            <el-button @click="evaluateVisible = false">取消</el-button>
+            <el-button type="primary" @click="submitEvaluate">提交评价</el-button>
+        </template>
+    </el-dialog>
+
+    <!-- ==================== 工单详情 ==================== -->
+    <el-drawer v-model="detailVisible" title="工单详情" size="520px">
+        <div v-if="detail">
+            <el-descriptions :column="1" border>
+                <el-descriptions-item label="工单号">{{ detail.orderNo }}</el-descriptions-item>
+                <el-descriptions-item label="状态">
+                    <el-tag :type="statusType(detail.status)">{{ detail.statusName }}</el-tag>
+                </el-descriptions-item>
+                <el-descriptions-item label="设备">
+                    {{ detail.deviceName }}（{{ detail.categoryName || '-' }}）
+                </el-descriptions-item>
+                <el-descriptions-item label="地点">{{ detail.location }}</el-descriptions-item>
+                <el-descriptions-item label="故障描述">{{ detail.description || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="报修人">{{ detail.studentName }}</el-descriptions-item>
+                <el-descriptions-item label="维修工">{{ detail.repairerName || '-' }}</el-descriptions-item>
+                <el-descriptions-item label="创建时间">{{ detail.createTime }}</el-descriptions-item>
+                <el-descriptions-item label="完成时间">{{ detail.finishTime || '-' }}</el-descriptions-item>
+            </el-descriptions>
+
+            <h4 class="section-title">流转记录</h4>
+            <el-timeline v-if="detail.logs && detail.logs.length">
+                <el-timeline-item v-for="log in detail.logs" :key="log.id"
+                                  :timestamp="log.createTime" placement="top">
+                    <b>{{ log.operatorName }}</b> {{ log.action }}
+                    <span v-if="log.remark" class="log-remark">（{{ log.remark }}）</span>
+                </el-timeline-item>
+            </el-timeline>
+            <el-empty v-else description="暂无记录" :image-size="60"></el-empty>
+
+            <template v-if="detail.evaluation">
+                <h4 class="section-title">评价</h4>
+                <el-rate :model-value="detail.evaluation.score" disabled show-score></el-rate>
+                <p class="evaluation-content">{{ detail.evaluation.content || '（无文字评价）' }}</p>
+            </template>
+        </div>
+    </el-drawer>
+</div>
+
+<script src="/lib/vue.js"></script>
+<script src="/lib/element-plus.js"></script>
+<script src="/lib/element-plus-locale-zh-cn.js"></script>
+<script src="/lib/axios.min.js"></script>
+<script>
+    const { createApp, reactive, ref, computed, onMounted } = Vue;
+    const { ElMessage } = ElementPlus;
+
+    // ---------- axios 封装 ----------
+    const api = axios.create({ timeout: 10000 });
+
+    api.interceptors.request.use(config => {
+        const token = localStorage.getItem('token');
+        if (token) {
+            config.headers.Authorization = 'Bearer ' + token;
+        }
+        return config;
+    });
+
+    api.interceptors.response.use(
+        res => {
+            const body = res.data;
+            if (body && body.code !== 200) {
+                ElMessage.error(body.message || '请求失败');
+                return Promise.reject(body);
+            }
+            return body;
+        },
+        err => {
+            const status = err.response && err.response.status;
+            if (status === 401) {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                ElMessage.error('登录已过期，请重新登录');
+                setTimeout(() => location.reload(), 800);
+            } else {
+                const msg = err.response && err.response.data && err.response.data.message;
+                ElMessage.error(msg || '网络错误');
+            }
+            return Promise.reject(err);
+        }
+    );
+
+    // ---------- Vue 应用 ----------
+    const app = createApp({
+        setup() {
+            const token = ref(localStorage.getItem('token') || '');
+            const user = reactive({ userId: null, username: '', realName: '', roleCode: '', roleName: '' });
+
+            const orders = ref([]);
+            const total = ref(0);
+            const loading = ref(false);
+            const query = reactive({ pageNum: 1, pageSize: 10, status: null, keyword: '' });
+
+            const categories = ref([]);
+            const repairers = ref([]);
+
+            const detail = ref(null);
+            const detailVisible = ref(false);
+
+            const loginForm = reactive({ username: 'admin', password: '123456' });
+            const loginLoading = ref(false);
+
+            const createVisible = ref(false);
+            const createForm = reactive({ categoryId: null, deviceName: '', location: '', description: '' });
+
+            const assignVisible = ref(false);
+            const assignForm = reactive({ orderId: null, repairerId: null });
+
+            const evaluateVisible = ref(false);
+            const evaluateForm = reactive({ orderId: null, score: 5, content: '' });
+
+            const isAdmin = computed(() => user.roleCode === 'ADMIN');
+            const isStudent = computed(() => user.roleCode === 'STUDENT');
+            const isRepairer = computed(() => user.roleCode === 'REPAIRER');
+            const roleText = computed(() =>
+                ({ ADMIN: '管理员', STUDENT: '学生', REPAIRER: '维修工' }[user.roleCode] || '')
+            );
+
+            const initUser = () => {
+                const saved = localStorage.getItem('user');
+                if (saved) {
+                    try { Object.assign(user, JSON.parse(saved)); } catch (e) { /* ignore */ }
+                }
+            };
+
+            const login = async () => {
+                if (!loginForm.username || !loginForm.password) {
+                    ElMessage.warning('请输入用户名和密码');
+                    return;
+                }
+                loginLoading.value = true;
+                try {
+                    const res = await api.post('/api/auth/login', loginForm);
+                    const data = res.data;
+                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('user', JSON.stringify(data));
+                    token.value = data.token;
+                    Object.assign(user, data);
+                    ElMessage.success('登录成功');
+                    loadOrders();
+                } finally {
+                    loginLoading.value = false;
+                }
+            };
+
+            const logout = () => {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                token.value = '';
+                user.roleCode = '';
+            };
+
+            const loadOrders = async () => {
+                loading.value = true;
+                try {
+                    const params = { pageNum: query.pageNum, pageSize: query.pageSize };
+                    if (query.status !== null && query.status !== undefined && query.status !== '') {
+                        params.status = query.status;
+                    }
+                    if (query.keyword) {
+                        params.keyword = query.keyword;
+                    }
+                    const res = await api.get('/api/orders/page', { params });
+                    orders.value = res.data.records || [];
+                    total.value = res.data.total || 0;
+                } finally {
+                    loading.value = false;
+                }
+            };
+
+            const loadCategories = async () => {
+                try {
+                    const res = await api.get('/api/categories/list');
+                    categories.value = res.data || [];
+                } catch (e) { /* ignore */ }
+            };
+
+            const openCreate = () => {
+                createForm.categoryId = null;
+                createForm.deviceName = '';
+                createForm.location = '';
+                createForm.description = '';
+                loadCategories();
+                createVisible.value = true;
+            };
+
+            const submitCreate = async () => {
+                if (!createForm.categoryId || !createForm.deviceName || !createForm.location) {
+                    ElMessage.warning('请填写设备分类、设备名称和故障地点');
+                    return;
+                }
+                await api.post('/api/orders', createForm);
+                ElMessage.success('提交成功');
+                createVisible.value = false;
+                loadOrders();
+            };
+
+            const openDetail = async (row) => {
+                const res = await api.get('/api/orders/' + row.id);
+                detail.value = res.data;
+                detailVisible.value = true;
+            };
+
+            const openAssign = async (row) => {
+                assignForm.orderId = row.id;
+                assignForm.repairerId = null;
+                if (!repairers.value.length) {
+                    const res = await api.get('/api/users/repairers');
+                    repairers.value = res.data || [];
+                }
+                assignVisible.value = true;
+            };
+
+            const submitAssign = async () => {
+                if (!assignForm.repairerId) {
+                    ElMessage.warning('请选择维修工');
+                    return;
+                }
+                await api.put('/api/orders/assign', assignForm);
+                ElMessage.success('派单成功');
+                assignVisible.value = false;
+                loadOrders();
+            };
+
+            const startOrder = async (row) => {
+                await api.put('/api/orders/' + row.id + '/start');
+                ElMessage.success('已开始处理');
+                loadOrders();
+            };
+
+            const finishOrder = async (row) => {
+                await api.put('/api/orders/' + row.id + '/finish');
+                ElMessage.success('工单已完成');
+                loadOrders();
+            };
+
+            const openEvaluate = (row) => {
+                evaluateForm.orderId = row.id;
+                evaluateForm.score = 5;
+                evaluateForm.content = '';
+                evaluateVisible.value = true;
+            };
+
+            const submitEvaluate = async () => {
+                await api.post('/api/orders/evaluate', evaluateForm);
+                ElMessage.success('评价成功');
+                evaluateVisible.value = false;
+                loadOrders();
+            };
+
+            const statusType = (s) =>
+                ({ 0: 'info', 1: 'warning', 2: 'primary', 3: 'success', 4: 'success' }[s] || 'info');
+
+            onMounted(() => {
+                if (token.value) {
+                    initUser();
+                    loadOrders();
+                }
+            });
+
+            return {
+                token, user, roleText, isAdmin, isStudent, isRepairer,
+                orders, total, loading, query,
+                categories, repairers,
+                detail, detailVisible,
+                loginForm, loginLoading, login, logout,
+                createVisible, createForm, openCreate, submitCreate,
+                assignVisible, assignForm, openAssign, submitAssign,
+                evaluateVisible, evaluateForm, openEvaluate, submitEvaluate,
+                startOrder, finishOrder,
+                openDetail, loadOrders, statusType
+            };
+        }
+    });
+
+    app.use(ElementPlus, typeof ElementPlusLocaleZhCn !== 'undefined' ? { locale: ElementPlusLocaleZhCn } : {});
+    app.mount('#app');
+</script>
+</body>
+</html>

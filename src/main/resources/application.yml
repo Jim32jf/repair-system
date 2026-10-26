@@ -1,0 +1,55 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: repair-system
+
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/repair_system?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: ${MYSQL_PASSWORD:root}
+
+  redis:
+    host: localhost
+    port: 6379
+    database: 0
+    timeout: 3000ms
+
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: GMT+8
+
+  mvc:
+    pathmatch:
+      matching-strategy: ant_path_matcher
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+
+# JWT 配置
+jwt:
+  # 生产环境务必替换为更长的随机字符串，并通过环境变量注入
+  secret: repair-system-jwt-secret-2026-please-change
+  # 过期时间（秒），86400 = 24 小时
+  expire: 86400
