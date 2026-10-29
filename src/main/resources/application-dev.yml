@@ -1,0 +1,17 @@
+# 开发环境：打印 SQL、开启接口文档
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+  api-docs:
+    path: /v3/api-docs
+
+knife4j:
+  enable: true
+
+logging:
+  level:
+    com.demo.repair: debug

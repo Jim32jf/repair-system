@@ -2,7 +2,7 @@ package com.demo.repair.service.impl;
 
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.StrUtil;
-import cn.hutool.crypto.SecureUtil;
+import cn.hutool.crypto.digest.BCrypt;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -17,6 +17,7 @@ import com.demo.repair.entity.SysUser;
 import com.demo.repair.mapper.SysRoleMapper;
 import com.demo.repair.mapper.SysUserMapper;
 import com.demo.repair.service.UserService;
+import com.demo.repair.util.TokenRevoker;
 import com.demo.repair.vo.UserVO;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -33,6 +34,8 @@ public class UserServiceImpl implements UserService {
     private final SysUserMapper userMapper;
 
     private final SysRoleMapper roleMapper;
+
+    private final TokenRevoker tokenRevoker;
 
     @Override
     public PageResult<UserVO> page(UserQueryDTO query) {
@@ -68,7 +71,7 @@ public class UserServiceImpl implements UserService {
 
         SysUser user = new SysUser();
         user.setUsername(dto.getUsername());
-        user.setPassword(SecureUtil.md5(dto.getPassword()));
+        user.setPassword(BCrypt.hashpw(dto.getPassword()));
         user.setRealName(dto.getRealName());
         user.setPhone(dto.getPhone());
         user.setRoleId(dto.getRoleId());
@@ -78,7 +81,8 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public void update(UserUpdateDTO dto) {
-        if (userMapper.selectById(dto.getId()) == null) {
+        SysUser existing = userMapper.selectById(dto.getId());
+        if (existing == null) {
             throw new BusinessException(404, "用户不存在");
         }
 
@@ -89,6 +93,13 @@ public class UserServiceImpl implements UserService {
         update.setRoleId(dto.getRoleId());
         update.setStatus(dto.getStatus());
         userMapper.updateById(update);
+
+        // 修改时禁用了账号、或调整了角色（token 内的 roleCode 已过时），同样吊销
+        boolean disabled = dto.getStatus() != null && dto.getStatus() == 0;
+        boolean roleChanged = dto.getRoleId() != null && !dto.getRoleId().equals(existing.getRoleId());
+        if (disabled || roleChanged) {
+            tokenRevoker.revoke(dto.getId());
+        }
     }
 
     @Override
@@ -100,6 +111,8 @@ public class UserServiceImpl implements UserService {
             throw new BusinessException(404, "用户不存在");
         }
         userMapper.deleteById(id);
+        // 删除立即生效：吊销其旧 token，否则拦截器只验签、旧 token 仍可用满 24 小时
+        tokenRevoker.revoke(id);
     }
 
     @Override
@@ -118,6 +131,11 @@ public class UserServiceImpl implements UserService {
         update.setId(id);
         update.setStatus(status);
         userMapper.updateById(update);
+
+        // 禁用即刻踢下线，吊销其已签发的 token
+        if (status == 0) {
+            tokenRevoker.revoke(id);
+        }
     }
 
     @Override
@@ -128,8 +146,11 @@ public class UserServiceImpl implements UserService {
 
         SysUser update = new SysUser();
         update.setId(id);
-        update.setPassword(SecureUtil.md5("123456"));
+        update.setPassword(BCrypt.hashpw("123456"));
         userMapper.updateById(update);
+
+        // 密码已变，旧 token 一并作废，强制用新密码重新登录
+        tokenRevoker.revoke(id);
     }
 
     @Override

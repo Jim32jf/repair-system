@@ -1,7 +1,7 @@
 -- =============================================
 -- 校园设备报修系统 - 数据库初始化脚本
 -- 执行方式：mysql -uroot -p < init.sql
--- 说明：初始化账号密码统一为 123456（MD5 存储，仅教学用，生产应使用 BCrypt 加盐）
+-- 说明：初始化账号密码统一为 123456（BCrypt 加盐哈希存储）
 -- 注意：文件必须使用 UTF-8 编码保存
 -- =============================================
 
@@ -37,7 +37,7 @@ CREATE TABLE sys_role (
 CREATE TABLE sys_user (
     id          BIGINT       NOT NULL AUTO_INCREMENT COMMENT '主键',
     username    VARCHAR(50)  NOT NULL COMMENT '登录账号',
-    password    VARCHAR(100) NOT NULL COMMENT '密码（MD5）',
+    password    VARCHAR(100) NOT NULL COMMENT '密码（BCrypt 加盐哈希）',
     real_name   VARCHAR(50)           DEFAULT NULL COMMENT '真实姓名',
     phone       VARCHAR(20)           DEFAULT NULL COMMENT '手机号',
     role_id     BIGINT       NOT NULL COMMENT '角色ID',
@@ -116,11 +116,11 @@ INSERT INTO sys_role (role_name, role_code, description) VALUES
 ('维修工', 'REPAIRER', '接单、处理工单'),
 ('管理员', 'ADMIN', '派单、用户与分类管理');
 
--- 密码均为 123456，MD5 = e10adc3949ba59abbe56e057f20f883e
+-- 密码均为 123456，BCrypt 加盐哈希（同一明文每次哈希不同，此处为固定种子值，可直接用于初始化）
 INSERT INTO sys_user (username, password, real_name, phone, role_id, status) VALUES
-('admin',    'e10adc3949ba59abbe56e057f20f883e', '管理员', '13800000000', 3, 1),
-('student',  'e10adc3949ba59abbe56e057f20f883e', '张三',   '13800000001', 1, 1),
-('repairer', 'e10adc3949ba59abbe56e057f20f883e', '李师傅', '13800000002', 2, 1);
+('admin',    '$2a$10$FBCAh33XjE2PgnFIIn6jDeAau6YccfIyq751nZaTCcHpldEqsw796', '管理员', '13800000000', 3, 1),
+('student',  '$2a$10$FBCAh33XjE2PgnFIIn6jDeAau6YccfIyq751nZaTCcHpldEqsw796', '张三',   '13800000001', 1, 1),
+('repairer', '$2a$10$FBCAh33XjE2PgnFIIn6jDeAau6YccfIyq751nZaTCcHpldEqsw796', '李师傅', '13800000002', 2, 1);
 
 INSERT INTO device_category (name, sort) VALUES
 ('电脑', 1),

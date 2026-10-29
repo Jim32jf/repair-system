@@ -1,13 +1,13 @@
 package com.demo.repair.service;
 
 import com.demo.repair.dto.CategoryDTO;
-import com.demo.repair.entity.DeviceCategory;
+import com.demo.repair.vo.CategoryVO;
 
 import java.util.List;
 
 public interface CategoryService {
 
-    List<DeviceCategory> list();
+    List<CategoryVO> list();
 
     void create(CategoryDTO dto);
 

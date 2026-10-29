@@ -1,5 +1,6 @@
 package com.demo.repair.service.impl;
 
+import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.demo.repair.common.BusinessException;
@@ -9,6 +10,7 @@ import com.demo.repair.entity.RepairOrder;
 import com.demo.repair.mapper.DeviceCategoryMapper;
 import com.demo.repair.mapper.RepairOrderMapper;
 import com.demo.repair.service.CategoryService;
+import com.demo.repair.vo.CategoryVO;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +20,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -37,22 +40,27 @@ public class CategoryServiceImpl implements CategoryService {
     private final ObjectMapper objectMapper;
 
     @Override
-    public List<DeviceCategory> list() {
+    public List<CategoryVO> list() {
         // 1. 先查缓存；Redis 异常时降级到数据库，不影响业务
         try {
             String cached = redisTemplate.opsForValue().get(CACHE_KEY);
             if (StrUtil.isNotBlank(cached)) {
-                return objectMapper.readValue(cached, new TypeReference<List<DeviceCategory>>() {
+                return objectMapper.readValue(cached, new TypeReference<List<CategoryVO>>() {
                 });
             }
         } catch (Exception e) {
             log.warn("读取分类缓存失败，降级查询数据库: {}", e.getMessage());
         }
 
-        // 2. 缓存未命中，查询数据库
-        List<DeviceCategory> list = categoryMapper.selectList(new LambdaQueryWrapper<DeviceCategory>()
+        // 2. 缓存未命中，查询数据库并转换为 VO（不暴露 deleted 等内部字段）
+        List<DeviceCategory> entities = categoryMapper.selectList(new LambdaQueryWrapper<DeviceCategory>()
                 .orderByAsc(DeviceCategory::getSort)
                 .orderByAsc(DeviceCategory::getId));
+        List<CategoryVO> list = entities.stream().map(entity -> {
+            CategoryVO vo = new CategoryVO();
+            BeanUtil.copyProperties(entity, vo);
+            return vo;
+        }).collect(Collectors.toList());
 
         // 3. 回写缓存，设置 60 分钟过期
         try {

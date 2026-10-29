@@ -35,7 +35,7 @@ public class UserController {
 
     @Operation(summary = "分页查询用户")
     @GetMapping("/page")
-    public Result<PageResult<UserVO>> page(UserQueryDTO query) {
+    public Result<PageResult<UserVO>> page(@Valid UserQueryDTO query) {
         return Result.success(userService.page(query));
     }
 

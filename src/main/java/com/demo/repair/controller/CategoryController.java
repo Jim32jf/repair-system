@@ -3,8 +3,8 @@ package com.demo.repair.controller;
 import com.demo.repair.common.RequireRole;
 import com.demo.repair.common.Result;
 import com.demo.repair.dto.CategoryDTO;
-import com.demo.repair.entity.DeviceCategory;
 import com.demo.repair.service.CategoryService;
+import com.demo.repair.vo.CategoryVO;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -30,7 +30,7 @@ public class CategoryController {
 
     @Operation(summary = "分类列表")
     @GetMapping("/list")
-    public Result<List<DeviceCategory>> list() {
+    public Result<List<CategoryVO>> list() {
         return Result.success(categoryService.list());
     }
 

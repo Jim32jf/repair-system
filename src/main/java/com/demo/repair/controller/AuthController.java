@@ -31,6 +31,13 @@ public class AuthController {
         return Result.success(authService.login(dto));
     }
 
+    @Operation(summary = "登出（吊销当前账号已签发的全部 token）")
+    @PostMapping("/logout")
+    public Result<Void> logout() {
+        authService.logout();
+        return Result.success();
+    }
+
     @Operation(summary = "当前登录用户")
     @GetMapping("/me")
     public Result<LoginVO> me() {

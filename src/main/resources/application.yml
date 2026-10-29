@@ -5,6 +5,10 @@ spring:
   application:
     name: repair-system
 
+  profiles:
+    # 默认 dev；生产启动必须设置 SPRING_PROFILES_ACTIVE=prod（docker-compose 已内置）
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     url: jdbc:mysql://localhost:3306/repair_system?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
@@ -28,7 +32,7 @@ spring:
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    # SQL 日志开关按环境区分，见 application-dev.yml / application-prod.yml
   global-config:
     db-config:
       id-type: auto
@@ -36,20 +40,20 @@ mybatis-plus:
       logic-delete-value: 1
       logic-not-delete-value: 0
 
-springdoc:
-  swagger-ui:
-    path: /swagger-ui.html
-  api-docs:
-    path: /v3/api-docs
-
 knife4j:
-  enable: true
   setting:
     language: zh_cn
 
+# 业务配置
+repair:
+  login:
+    # 同一 IP 连续登录失败达到该次数后锁定（依赖 Redis；Redis 不可用时自动放行）
+    max-fail-count: 10
+    lock-minutes: 5
+
 # JWT 配置
 jwt:
-  # 生产环境务必替换为更长的随机字符串，并通过环境变量注入
-  secret: repair-system-jwt-secret-2026-please-change
+  # 支持环境变量覆盖；生产环境务必通过 JWT_SECRET 注入更长的随机字符串
+  secret: ${JWT_SECRET:repair-system-jwt-secret-2026-please-change}
   # 过期时间（秒），86400 = 24 小时
   expire: 86400

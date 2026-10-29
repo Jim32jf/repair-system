@@ -41,7 +41,7 @@ public class OrderController {
 
     @Operation(summary = "工单分页（按角色自动过滤）")
     @GetMapping("/page")
-    public Result<PageResult<OrderVO>> page(OrderQueryDTO query) {
+    public Result<PageResult<OrderVO>> page(@Valid OrderQueryDTO query) {
         return Result.success(orderService.page(query));
     }
 

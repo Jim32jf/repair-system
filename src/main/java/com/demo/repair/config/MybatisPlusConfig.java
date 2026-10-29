@@ -15,7 +15,10 @@ public class MybatisPlusConfig {
     @Bean
     public MybatisPlusInterceptor mybatisPlusInterceptor() {
         MybatisPlusInterceptor interceptor = new MybatisPlusInterceptor();
-        interceptor.addInnerInterceptor(new PaginationInnerInterceptor(DbType.MYSQL));
+        PaginationInnerInterceptor pagination = new PaginationInnerInterceptor(DbType.MYSQL);
+        // 服务端兜底上限：即使 DTO 校验被绕过，也不会一次拉走全表
+        pagination.setMaxLimit(100L);
+        interceptor.addInnerInterceptor(pagination);
         return interceptor;
     }
 }

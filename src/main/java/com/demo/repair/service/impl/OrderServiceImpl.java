@@ -6,6 +6,7 @@ import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.demo.repair.common.BusinessException;
@@ -150,11 +151,15 @@ public class OrderServiceImpl implements OrderService {
             throw new BusinessException("该用户不是维修工");
         }
 
-        RepairOrder update = new RepairOrder();
-        update.setId(order.getId());
-        update.setRepairerId(repairer.getId());
-        update.setStatus(OrderStatus.ASSIGNED);
-        orderMapper.updateById(update);
+        // 条件更新：仅当仍是"待派单"才写入，防止并发重复派单
+        int rows = orderMapper.update(null, new LambdaUpdateWrapper<RepairOrder>()
+                .eq(RepairOrder::getId, order.getId())
+                .eq(RepairOrder::getStatus, OrderStatus.PENDING_ASSIGN)
+                .set(RepairOrder::getRepairerId, repairer.getId())
+                .set(RepairOrder::getStatus, OrderStatus.ASSIGNED));
+        if (rows == 0) {
+            throw new BusinessException("工单状态已变更，请刷新后重试");
+        }
 
         addLog(order.getId(), UserContext.getUserId(), "派单", "分配给：" + repairer.getRealName());
     }
@@ -168,10 +173,14 @@ public class OrderServiceImpl implements OrderService {
             throw new BusinessException("当前状态不允许开始处理");
         }
 
-        RepairOrder update = new RepairOrder();
-        update.setId(order.getId());
-        update.setStatus(OrderStatus.PROCESSING);
-        orderMapper.updateById(update);
+        // 条件更新：仅当仍是"已派单"才置为处理中
+        int rows = orderMapper.update(null, new LambdaUpdateWrapper<RepairOrder>()
+                .eq(RepairOrder::getId, order.getId())
+                .eq(RepairOrder::getStatus, OrderStatus.ASSIGNED)
+                .set(RepairOrder::getStatus, OrderStatus.PROCESSING));
+        if (rows == 0) {
+            throw new BusinessException("工单状态已变更，请刷新后重试");
+        }
 
         addLog(order.getId(), UserContext.getUserId(), "开始处理", null);
     }
@@ -185,11 +194,15 @@ public class OrderServiceImpl implements OrderService {
             throw new BusinessException("当前状态不允许完成");
         }
 
-        RepairOrder update = new RepairOrder();
-        update.setId(order.getId());
-        update.setStatus(OrderStatus.FINISHED);
-        update.setFinishTime(LocalDateTime.now());
-        orderMapper.updateById(update);
+        // 条件更新：仅当仍是"处理中"才置为已完成，防止双击重复完成、重复记日志
+        int rows = orderMapper.update(null, new LambdaUpdateWrapper<RepairOrder>()
+                .eq(RepairOrder::getId, order.getId())
+                .eq(RepairOrder::getStatus, OrderStatus.PROCESSING)
+                .set(RepairOrder::getStatus, OrderStatus.FINISHED)
+                .set(RepairOrder::getFinishTime, LocalDateTime.now()));
+        if (rows == 0) {
+            throw new BusinessException("工单状态已变更，请刷新后重试");
+        }
 
         addLog(order.getId(), UserContext.getUserId(), "完成维修", null);
     }
@@ -216,10 +229,14 @@ public class OrderServiceImpl implements OrderService {
         evaluation.setContent(dto.getContent());
         evaluationMapper.insert(evaluation);
 
-        RepairOrder update = new RepairOrder();
-        update.setId(order.getId());
-        update.setStatus(OrderStatus.EVALUATED);
-        orderMapper.updateById(update);
+        // 条件更新：仅当仍是"已完成"才置为已评价
+        int rows = orderMapper.update(null, new LambdaUpdateWrapper<RepairOrder>()
+                .eq(RepairOrder::getId, order.getId())
+                .eq(RepairOrder::getStatus, OrderStatus.FINISHED)
+                .set(RepairOrder::getStatus, OrderStatus.EVALUATED));
+        if (rows == 0) {
+            throw new BusinessException("工单状态已变更，请刷新后重试");
+        }
 
         addLog(order.getId(), UserContext.getUserId(), "评价", dto.getScore() + " 星");
     }
