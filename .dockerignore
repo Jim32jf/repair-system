@@ -1,0 +1,3 @@
+# 构建上下文只留必需的 jar，src/docs/scripts 等不进镜像构建
+*
+!target/repair-system-1.0.0.jar
