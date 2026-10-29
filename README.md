@@ -14,7 +14,7 @@
 
 ## 功能特性
 
-- **登录认证**：JWT 无状态认证，自定义拦截器校验 token
+- **登录认证**：JWT 无状态认证，自定义拦截器校验 token；登出 / 禁用 / 删除 / 重置密码后即时吊销旧 token（Redis 水位线）
 - **角色权限**：STUDENT / REPAIRER / ADMIN 三种角色，注解式接口权限控制
 - **用户管理**：分页查询、新增、修改、删除、启用/禁用、重置密码
 - **设备分类**：分类的增删改查，被工单引用时禁止删除
@@ -95,7 +95,7 @@ mvn spring-boot:run
 | student | 123456 | 学生 | 提交报修、评价 |
 | repairer | 123456 | 维修工 | 处理工单 |
 
-> 密码使用 MD5 存储，仅用于教学演示。生产环境应使用 BCrypt 加盐。
+> 密码使用 BCrypt 加盐哈希存储（`init.sql` 种子账号亦为 BCrypt）。登录校验按 `$2` 前缀区分格式，兼容历史遗留的 MD5 账号，迁移完成后可移除 MD5 分支。
 
 ## 接口一览
 
@@ -104,6 +104,7 @@ mvn spring-boot:run
 | 方法 | 路径 | 说明 |
 |---|---|---|
 | POST | `/api/auth/login` | 登录 |
+| POST | `/api/auth/logout` | 登出（吊销当前账号已签发的全部 token） |
 | GET | `/api/auth/me` | 当前登录用户 |
 
 ### 用户管理（ADMIN）
@@ -172,9 +173,17 @@ repair-system
 
 ## 核心设计
 
-### JWT 认证
+### JWT 认证与吊销
 
-登录成功后签发 JWT，payload 包含 `userId`、`username`、`roleCode`。拦截器解析并校验签名与过期时间，将用户信息放入 `ThreadLocal`，请求结束时清理。
+登录成功后签发 JWT，payload 包含 `userId`、`username`、`roleCode`、`loginTime`（签发毫秒时间戳）。拦截器解析并校验签名与过期时间，将用户信息放入 `ThreadLocal`，请求结束时清理。
+
+JWT 本身无状态，无法主动作废。项目用 Redis「失效水位线」补齐：`repair:token:epoch:{userId}` 记录吊销时刻，**登出 / 禁用 / 删除 / 改角色 / 重置密码**时写入；拦截器发现 `loginTime < 水位线` 即返回 401。水位线 TTL 与 token 有效期一致（24h），到期自动清除。Redis 异常时放行（fail-open），与登录限流的降级策略一致——代价是故障窗口内已吊销 token 短暂可用。
+
+> 已知限制：水位线按用户整体吊销，无「单设备下线」粒度；升级前签发的旧 token 无 `loginTime` 字段，视为未吊销（24h 内自然过期）。
+
+### 环境隔离（profile）
+
+配置分三块：`application.yml`（公共）、`application-dev.yml`（SQL 打印 + Swagger）、`application-prod.yml`（关 SQL 打印、`knife4j.production: true` + 关闭 springdoc）。默认激活 dev；**生产裸 jar 启动必须设置 `SPRING_PROFILES_ACTIVE=prod`**，docker-compose 已内置该变量，未设置时 `/doc.html` 和全量 SQL 日志在生产是敞开的。
 
 ### 角色权限
 
@@ -204,10 +213,9 @@ repair-system
 
 ## 后续可扩展
 
-- 密码改用 BCrypt 加盐
 - 报修图片上传
 - 工单超时提醒、统计报表
-- 前端页面（Vue / React）
+- 集成测试（MockMvc / Testcontainers）与覆盖率门禁
 
 ## 冒烟测试
 
