@@ -1,0 +1,20 @@
+# 集成测试环境：H2 内存库（MySQL 兼容模式），Redis 由 @MockBean 替身
+spring:
+  datasource:
+    driver-class-name: org.h2.Driver
+    url: jdbc:h2:mem:repair_test;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password:
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+      data-locations: classpath:data.sql
+
+knife4j:
+  enable: false
+
+logging:
+  level:
+    root: warn
+    com.demo.repair: info
